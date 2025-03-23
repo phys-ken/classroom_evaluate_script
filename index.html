@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      /* カードのスタイル調整 */
+      .tile {
+        display: inline-block;
+        width: 300px; /* 初期値は300px（後でスライダーで変更） */
+        min-height: 200px;
+        margin: 8px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        vertical-align: top;
+      }
+      .name {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .link {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .preview-container {
+        margin-top: 8px;
+      }
+      .multiple-links a {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .score-input {
+        display: block;
+        margin-top: 8px;
+        width: 60px;
+      }
+      /* ページ上部のカードサイズ調整バー */
+      #cardSizeControl {
+        padding: 10px;
+        background: #eee;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- カードサイズ調整バー -->
+    <div id="cardSizeControl">
+      カードサイズ: 
+      <input type="range" id="cardSizeSlider" min="150" max="500" value="300">
+      <span id="cardSizeValue">300px</span>
+    </div>
+    <h1 id="title"></h1>
+    <div id="tiles-container"></div>
+    <button id="saveBtn">採点を記録</button>
+
+    <script>
+      // GASのテンプレートから受け取るデータ
+      var data = <?!= JSON.stringify(data) ?>;  // [{ rowIndex, name, link, score, embedCode, multipleLinks, linksArray }, ...]
+      var title = "<?!= title ?>";
+      var maxScore = <?!= maxScore ?>;
+      
+      // タイトル設定
+      document.getElementById('title').textContent = title;
+      
+      var container = document.getElementById('tiles-container');
+      
+      data.forEach(function(item) {
+        var tile = document.createElement('div');
+        tile.className = 'tile';
+        
+        // 名前表示
+        var nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = item.name;
+        tile.appendChild(nameEl);
+        
+        // 単一リンクの場合、「作品を見る」リンクを表示
+        if (item.link && !item.multipleLinks) {
+          var linkEl = document.createElement('a');
+          linkEl.className = 'link';
+          linkEl.href = item.link;
+          linkEl.target = '_blank';
+          linkEl.textContent = '作品を見る';
+          tile.appendChild(linkEl);
+        }
+        
+        // プレビューまたは複数リンク表示
+        var previewContainer = document.createElement('div');
+        previewContainer.className = 'preview-container';
+        if (item.link === '') {
+          // 未提出の場合は「未提出」と表示
+          previewContainer.textContent = '未提出';
+        } else if (item.multipleLinks) {
+          // 複数リンクの場合、各リンクを「リンク1」「リンク2」と表示
+          var multiDiv = document.createElement('div');
+          multiDiv.className = 'multiple-links';
+          item.linksArray.forEach(function(link, index) {
+            var a = document.createElement('a');
+            a.href = link;
+            a.target = '_blank';
+            a.textContent = 'リンク' + (index + 1);
+            multiDiv.appendChild(a);
+          });
+          previewContainer.appendChild(multiDiv);
+        } else if (item.embedCode) {
+          // 単一リンクの場合、プレビューの埋め込みコードを表示
+          previewContainer.innerHTML = item.embedCode;
+        }
+        tile.appendChild(previewContainer);
+        
+        // 得点入力欄
+        var inputEl = document.createElement('input');
+        inputEl.type = 'number';
+        inputEl.className = 'score-input';
+        // 初期値は、scoreが空文字の場合は空、そうでなければその値を表示
+        inputEl.value = (item.score === "" ? "" : item.score);
+        // タブ移動可能に（DOM順で標準動作するが念のため tabindex を設定）
+        inputEl.tabIndex = 0;
+        // 未提出の場合は入力不可に
+        if (item.link === '') {
+          inputEl.disabled = true;
+        }
+        inputEl.addEventListener('input', function(){
+          var value = inputEl.value.trim();
+          if (value === "") {
+            setTileColor(tile, null, maxScore, item.link !== '');
+          } else {
+            setTileColor(tile, parseInt(value), maxScore, item.link !== '');
+          }
+        });
+        tile.appendChild(inputEl);
+        
+        // 初期背景色設定
+        if (item.score === "") {
+          setTileColor(tile, null, maxScore, item.link !== '');
+        } else {
+          setTileColor(tile, parseInt(item.score), maxScore, item.link !== '');
+        }
+        
+        // rowIndexの紐付け
+        tile.dataset.rowIndex = item.rowIndex;
+        
+        container.appendChild(tile);
+      });
+      
+      /**
+       * 得点と提出状況に応じてカードの背景色を設定する関数
+       * @param {Element} tile - タイル要素
+       * @param {number|null} score - 入力された得点。nullの場合は未入力として扱う。
+       * @param {number} maxScore - 満点
+       * @param {boolean} submitted - 提出されているか（リンクがあるか）
+       */
+      function setTileColor(tile, score, maxScore, submitted) {
+        if (!submitted) {
+          tile.style.backgroundColor = 'darkgray';  // 未提出の場合
+        } else if (score === null) {
+          tile.style.backgroundColor = 'white'; // 未入力の場合
+        } else if (score === 0) {
+          tile.style.backgroundColor = 'red';
+        } else if (score >= maxScore) {
+          tile.style.backgroundColor = 'blue';
+        } else {
+          tile.style.backgroundColor = 'green';
+        }
+      }
+      
+      // カードサイズ調整バーの処理
+      var cardSizeSlider = document.getElementById('cardSizeSlider');
+      var cardSizeValue = document.getElementById('cardSizeValue');
+      
+      cardSizeSlider.addEventListener('input', function(){
+        var newSize = cardSizeSlider.value;
+        cardSizeValue.textContent = newSize + 'px';
+        // 全てのカードの幅を更新
+        var tiles = document.getElementsByClassName('tile');
+        Array.from(tiles).forEach(function(tile) {
+          tile.style.width = newSize + 'px';
+        });
+      });
+      
+      // 「採点を記録」ボタン押下時の処理
+      document.getElementById('saveBtn').addEventListener('click', function(){
+        var tiles = container.querySelectorAll('.tile');
+        var scoresArray = [];
+        tiles.forEach(function(tile) {
+          var rowIndex = tile.dataset.rowIndex;
+          var inputEl = tile.querySelector('input.score-input');
+          var score = inputEl.value.trim();
+          scoresArray.push({
+            rowIndex: parseInt(rowIndex),
+            score: score === "" ? "" : parseInt(score)
+          });
+        });
+        
+        google.script.run.withSuccessHandler(function(){
+          alert("保存が完了しました。");
+        }).saveScores_webui(scoresArray);
+      });
+    </script>
+  </body>
+</html>

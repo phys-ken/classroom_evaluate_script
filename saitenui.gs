@@ -39,7 +39,12 @@ function getSubmissionsData_webui() {
   
   const lastRow = sheet.getLastRow();
   if (lastRow < START_ROW_WEBUI) return [];
-  const dataRange = sheet.getRange(START_ROW_WEBUI, 1, lastRow - START_ROW_WEBUI + 1, sheet.getLastColumn());
+  const dataRange = sheet.getRange(
+    START_ROW_WEBUI, 
+    1, 
+    lastRow - START_ROW_WEBUI + 1, 
+    sheet.getLastColumn()
+  );
   const values = dataRange.getValues();
   
   const results = [];
@@ -57,9 +62,9 @@ function getSubmissionsData_webui() {
       linkValue = linkValue.toString().trim();
     }
     
-    // スコアは未入力の場合は空文字とする（「0」とは区別）
+    // スコアは、未入力の場合は空文字として扱い 0 とは区別
     const rawScore = row[SCORE_COLUMN_WEBUI - 1];
-    const score = (rawScore === "" || rawScore === null) ? "" : rawScore;
+    const score = (rawScore === '' || rawScore === null) ? '' : rawScore;
     
     // 名前がない場合はスキップ
     if (!name) continue;
@@ -69,14 +74,13 @@ function getSubmissionsData_webui() {
     let linksArray = [];
     
     if (linkValue === '') {
-      // 未提出の場合はプレビューはなし
+      // 未提出の場合はプレビューなし
       embedCode = '';
     } else {
-      // 複数リンクかどうか判定。 'http' の出現回数でチェック
+      // 複数リンクかどうか判定
       const countHttp = (linkValue.match(/http/g) || []).length;
       if (countHttp > 1) {
         multipleLinks = true;
-        // 正規表現で全てのURLを抽出
         linksArray = linkValue.match(/http\S+/g) || [];
       } else {
         // 単一リンクの場合、プレビュー用の埋め込みコードを生成
@@ -101,16 +105,16 @@ function getSubmissionsData_webui() {
 
 /**
  * 単一リンクからプレビュー表示用の埋め込みコードを生成する関数
- * 対応するのは、Googleスライド、Canva、Googleドキュメント、スプレッドシート、Googleマイマップ、Googleドライブ、YouTube、Vimeo、Scratch
- * @param {string} url - 対象のURL
- * @return {Object} - { embedCode: string, type: string }
+ * 対応するのは、Googleスライド、Canva、Googleドキュメント、スプレッドシート、Googleマイマップ、
+ * Googleドライブ、YouTube、Vimeo、Scratchなど
  */
 function generateEmbedCode_webui(url) {
   var embedCode = '';
   var type = '';
   
   if (url.indexOf('docs.google.com/presentation') !== -1) {
-    embedCode = '<iframe src="' + url.replace(/\/[^/]*$/, '/embed') + '" width="100%" height="300" frameborder="0" allowfullscreen="true"></iframe>';
+    embedCode = '<iframe src="' + url.replace(/\/[^/]*$/, '/embed') + 
+                '" width="100%" height="300" frameborder="0" allowfullscreen="true"></iframe>';
     type = 'google';
   } else if (url.indexOf('canva.com') !== -1) {
     var canvaURL = url;
@@ -126,30 +130,37 @@ function generateEmbedCode_webui(url) {
     } else {
       embedUrl = canvaURL;
     }
-    embedCode = '<div class="canva-embed-container"><iframe loading="lazy" src="' + embedUrl + '?embed" allowfullscreen="allowfullscreen" allow="fullscreen"></iframe></div>';
+    embedCode = '<div class="canva-embed-container"><iframe loading="lazy" src="' + embedUrl + 
+                '?embed" allowfullscreen="allowfullscreen" allow="fullscreen"></iframe></div>';
     type = 'canva';
   } else if (url.indexOf('docs.google.com/document') !== -1) {
-    embedCode = '<iframe src="' + url.replace(/\/edit.*$/, '/preview') + '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
+    embedCode = '<iframe src="' + url.replace(/\/edit.*$/, '/preview') + 
+                '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
     type = 'google';
   } else if (url.indexOf('docs.google.com/spreadsheets') !== -1) {
-    embedCode = '<iframe src="' + url.replace(/\/edit.*$/, '/preview') + '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
+    embedCode = '<iframe src="' + url.replace(/\/edit.*$/, '/preview') + 
+                '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
     type = 'google';
   } else if (url.indexOf('www.google.com/maps/d/') !== -1) {
     var embedUrl = url.replace('/edit', '/view');
-    embedCode = '<iframe src="' + embedUrl + '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
+    embedCode = '<iframe src="' + embedUrl + 
+                '" width="100%" height="480" frameborder="0" allowfullscreen="true"></iframe>';
     type = 'mymap';
   } else if (url.indexOf('drive.google.com') !== -1 && url.indexOf('file/d/') !== -1) {
     var fileIdMatch = url.match(/[-\w]{25,}/);
     if (fileIdMatch) {
       var fileId = fileIdMatch[0];
       if (url.indexOf('view') !== -1) {
-        embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + '/preview" width="100%" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
+        embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + 
+                    '/preview" width="100%" height="360" frameborder="0" ' + 
+                    'allow="autoplay; fullscreen" allowfullscreen></iframe>';
         type = 'video';
       } else {
         var imageUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
-        embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
-                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Google Drive Image" />' +
-                    '</div>';
+        embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center;' +
+                    'align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
+                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" ' +
+                    'alt="Google Drive Image" /></div>';
         type = 'image';
       }
     }
@@ -158,13 +169,16 @@ function generateEmbedCode_webui(url) {
     if (fileIdMatch) {
       var fileId = fileIdMatch[0];
       if (url.indexOf('view') !== -1) {
-        embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + '/preview" width="100%" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
+        embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + 
+                    '/preview" width="100%" height="360" frameborder="0" ' +
+                    'allow="autoplay; fullscreen" allowfullscreen></iframe>';
         type = 'video';
       } else {
         var imageUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
-        embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
-                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Google Drive Image" />' +
-                    '</div>';
+        embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center;' +
+                    'align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
+                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" ' +
+                    'alt="Google Drive Image" /></div>';
         type = 'image';
       }
     }
@@ -173,7 +187,9 @@ function generateEmbedCode_webui(url) {
     if (videoIdMatch) {
       var videoId = videoIdMatch[1];
       var videoUrl = 'https://www.youtube.com/embed/' + videoId;
-      embedCode = '<iframe width="100%" height="480" src="' + videoUrl + '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+      embedCode = '<iframe width="100%" height="480" src="' + videoUrl + 
+                  '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media;' +
+                  ' gyroscope; picture-in-picture" allowfullscreen></iframe>';
       type = 'video';
     }
   } else if (url.indexOf('vimeo.com') !== -1) {
@@ -181,15 +197,17 @@ function generateEmbedCode_webui(url) {
     if (videoIdMatch) {
       var videoId = videoIdMatch[1];
       var videoUrl = 'https://player.vimeo.com/video/' + videoId;
-      embedCode = '<iframe src="' + videoUrl + '" width="100%" height="480" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+      embedCode = '<iframe src="' + videoUrl + 
+                  '" width="100%" height="480" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
       type = 'video';
     }
   } else if (url.indexOf('scratch.mit.edu/projects/') !== -1) {
     var parts = url.split('/');
     var projectId = parts[parts.length - 1];
     embedCode = '<div class="scratch-embed" data-project-id="' + projectId + '">' +
-                '<iframe src="https://scratch.mit.edu/projects/' + projectId + '/embed" allowtransparency="true" width="100%" height="100%" frameborder="0" scrolling="no" allowfullscreen></iframe>' +
-                '</div>';
+                '<iframe src="https://scratch.mit.edu/projects/' + projectId + '/embed" ' +
+                'allowtransparency="true" width="100%" height="100%" frameborder="0" scrolling="no" ' +
+                'allowfullscreen></iframe></div>';
     type = 'scratch';
   }
   
@@ -207,12 +225,10 @@ function saveScores_webui(scores) {
   const sheet = ss.getSheetByName(SHEET_NAME_WEBUI);
   if (!sheet) return;
   
-  // 各行ごとに書き込む（未入力の場合は空文字のまま書き込む）
+  // 各行ごとに書き込む
   scores.forEach(function(item) {
     const row = item.rowIndex;
     const cell = sheet.getRange(row, SCORE_COLUMN_WEBUI);
     cell.setValue(item.score);
   });
-  
-  // 成功時のハンドリングはクライアント側で行います
 }

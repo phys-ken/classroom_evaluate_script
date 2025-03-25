@@ -1,32 +1,35 @@
 /***************************************************
- * onOpen(e): スプレッドシートを開いた際のメニュー作成
+ * onOpen(e): スプレッドシートを開いたときのメニュー
  ***************************************************/
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu("ClassroomAPI 一括採点")
     .addItem("シート初期設定", "setupSheets")
+    .addItem("classroomの情報を更新", "updateClassroomData")
+    .addSeparator()
     .addItem("課題作成", "confirmAndCreateAssignment")
     .addSeparator()
-    .addItem("（評価）課題一覧取得", "fetchAssignmentsForSelectedClass")
     .addItem("（評価）提出一覧取得", "fetchSubmissionsForSelectedAssignment")
-    .addItem("（評価）評価送信 (得点のみ)", "updateStudentGrades")       // 返却せず得点のみ
-    .addItem("（評価）評価送信＆返却", "updateStudentGradesAndReturn") // 返却も行う
+    .addItem("（評価）評価送信 (得点のみ)", "updateStudentGrades")
+    .addItem("（評価）評価送信＆返却", "updateStudentGradesAndReturn")
     .addToUi();
 }
 
 
 /***************************************************
- * シート初期設定: 必要なシートを作成し、Classroom APIからコース一覧を取得
+ * setupSheets():
+ *   必要シートを作成＆初期化し、
+ *   コース名/課題名のプルダウン連動を実装
  ***************************************************/
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // 1) CourseListシート
-  let courseListSheet = ss.getSheetByName("CourseList");
-  if (!courseListSheet) {
-    courseListSheet = ss.insertSheet("CourseList");
-    courseListSheet.getRange("A1").setValue("courseId");
-    courseListSheet.getRange("B1").setValue("courseName");
+  // 1) CourseListシート (A=courseName, B=courseId)
+  let courseList = ss.getSheetByName("CourseList");
+  if (!courseList) {
+    courseList = ss.insertSheet("CourseList");
+    courseList.getRange("A1").setValue("courseName");
+    courseList.getRange("B1").setValue("courseId");
   }
 
   // 2) 課題作成用シート
@@ -37,7 +40,7 @@ function setupSheets() {
     creationSheet.getRange("B1").setValue("課題名");
     creationSheet.getRange("C1").setValue("配点");
     creationSheet.getRange("D1").setValue("課題の説明");
-    creationSheet.getRange("A2").setValue("（プルダウン）");
+    creationSheet.getRange("A2").setValue("（プルダウン:コース名）");
     creationSheet.getRange("B2").setValue("API確認用課題");
     creationSheet.getRange("C2").setValue("10");
     creationSheet.getRange("D2").setValue("これはテスト課題です。");
@@ -49,17 +52,17 @@ function setupSheets() {
     evaluationSheet = ss.insertSheet("Evaluation");
     evaluationSheet.getRange("A1").setValue("コース名");
     evaluationSheet.getRange("B1").setValue("課題名");
-    evaluationSheet.getRange("A2").setValue("（プルダウン）");
-    evaluationSheet.getRange("B2").setValue("（プルダウン）");
+    evaluationSheet.getRange("A2").setValue("（プルダウン:コース名）");
+    evaluationSheet.getRange("B2").setValue("（連動プルダウン）");
   }
 
-  // 4) 課題一覧保管シート
-  let assignmentListSheet = ss.getSheetByName("AssignmentList");
-  if (!assignmentListSheet) {
-    assignmentListSheet = ss.insertSheet("AssignmentList");
-    assignmentListSheet.getRange("A1").setValue("courseId");
-    assignmentListSheet.getRange("B1").setValue("courseWorkId");
-    assignmentListSheet.getRange("C1").setValue("courseWorkTitle");
+  // 4) AssignmentListシート (A=courseName, B=workId, C=title)
+  let assignmentList = ss.getSheetByName("AssignmentList");
+  if (!assignmentList) {
+    assignmentList = ss.insertSheet("AssignmentList");
+    assignmentList.getRange("A1").setValue("courseName");
+    assignmentList.getRange("B1").setValue("courseWorkId");
+    assignmentList.getRange("C1").setValue("courseWorkTitle");
   }
 
   // 5) Submissionsシート
@@ -67,7 +70,6 @@ function setupSheets() {
   if (!submissionsSheet) {
     submissionsSheet = ss.insertSheet("Submissions");
   }
-  // 見出し行を設定（A～H列）
   submissionsSheet.clear();
   submissionsSheet.getRange(1,1).setValue("userId");
   submissionsSheet.getRange(1,2).setValue("studentName");
@@ -78,65 +80,77 @@ function setupSheets() {
   submissionsSheet.getRange(1,7).setValue("attachments");
   submissionsSheet.getRange(1,8).setValue("inputScore");
 
-  // Classroom APIからコース一覧を取得し、CourseListに反映
-  fetchAndListCourses();
+  // 6) FilterHelperシート (連動プルダウン用)
+  let filterSheet = ss.getSheetByName("FilterHelper");
+  if (!filterSheet) {
+    filterSheet = ss.insertSheet("FilterHelper");
+  } else {
+    filterSheet.clear();
+  }
 
-  // コース名のプルダウンをAssignmentCreation!A2, Evaluation!A2に設定
-  setCourseNameDropdown(creationSheet);
-  setCourseNameDropdown(evaluationSheet);
+  // ラベル
+  filterSheet.getRange("A1").setValue("Selected CourseName");
+  filterSheet.getRange("B1").setValue("Filtered Titles");
 
-  SpreadsheetApp.getUi().alert("初期セットアップ完了");
+  // A2: =Evaluation!A2
+  filterSheet.getRange("A2").setFormula("=Evaluation!A2");
+
+  // B2: =IF(A2="","", FILTER(AssignmentList!C2:C, AssignmentList!A2:A=$A$2))
+  filterSheet.getRange("B2").setFormula(
+    '=IF(A2="","", FILTER(AssignmentList!C2:C, AssignmentList!A2:A=$A$2))'
+  );
+
+  // 7) コース名プルダウン
+  setCourseNameDropdown(creationSheet.getRange("A2"));
+  setCourseNameDropdown(evaluationSheet.getRange("A2"));
+
+  // 8) 課題名プルダウン(Evaluation!B2) → FilterHelper!B2:B
+  setAssignmentDropdownForEvaluation();
+
+  SpreadsheetApp.getUi().alert(
+    "初期セットアップ完了。\n" +
+    "次に「classroomの情報を更新」を行ってから、EvaluationシートA2のコース名を選ぶとB2が連動します。"
+  );
 }
 
 
 /***************************************************
- * fetchAndListCourses:
- *  Classroomからコース一覧を取得し、CourseListシート(A=ID,B=Name)に書き込む
+ * setCourseNameDropdown(targetCell)
+ *   - 常にデータバリデーションを設定し、CourseList(A列)を参照
+ *   - CourseListにデータがなくても設定だけは行う
  ***************************************************/
-function fetchAndListCourses() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("CourseList");
-  if (!sheet) throw new Error("CourseListシートがありません。");
-
-  sheet.getRange("A2:B").clearContent();
-
-  let response;
-  try {
-    response = Classroom.Courses.list({});
-  } catch (e) {
-    Logger.log("コース一覧取得失敗: " + e);
-    return;
-  }
-  if (!response.courses || response.courses.length === 0) {
-    Logger.log("利用可能なコースがありません。");
-    return;
-  }
-
-  let row = 2;
-  response.courses.forEach(course => {
-    sheet.getRange(row,1).setValue(course.id);
-    sheet.getRange(row,2).setValue(course.name);
-    row++;
-  });
-  Logger.log("コース一覧をCourseListに反映しました。");
-}
-
-
-/***************************************************
- * setCourseNameDropdown:
- *  指定シートのA2セルにコース名のプルダウンを設定
- ***************************************************/
-function setCourseNameDropdown(targetSheet) {
+function setCourseNameDropdown(targetCell) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const courseListSheet = ss.getSheetByName("CourseList");
   if (!courseListSheet) return;
 
-  const lastRow = courseListSheet.getLastRow();
-  if (lastRow < 2) return;
-
-  const rangeForDropdown = courseListSheet.getRange(2, 2, lastRow - 1, 1);
+  // A列=コース名全体を範囲指定(例: A2:A1000)
+  // あるいはシート全体で安全に設定
   const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInRange(rangeForDropdown, true)
+    .requireValueInRange(courseListSheet.getRange("A2:A1000"), true)
     .build();
-  targetSheet.getRange("A2").setDataValidation(rule);
+
+  targetCell.clearDataValidations();
+  targetCell.setDataValidation(rule);
+}
+
+
+/***************************************************
+ * setAssignmentDropdownForEvaluation():
+ *   Evaluation!B2 → FilterHelper!B2:B
+ ***************************************************/
+function setAssignmentDropdownForEvaluation() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const evalSheet = ss.getSheetByName("Evaluation");
+  const filterSheet = ss.getSheetByName("FilterHelper");
+  if (!evalSheet || !filterSheet) return;
+
+  // B2~B1000あたりを参照
+  const dvRange = filterSheet.getRange("B2:B1000");
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(dvRange, true)
+    .build();
+
+  evalSheet.getRange("B2").clearDataValidations();
+  evalSheet.getRange("B2").setDataValidation(rule);
 }

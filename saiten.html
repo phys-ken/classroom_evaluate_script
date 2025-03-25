@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      /* 固定ヘッダー */
+      #fixedHeader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: #fff;
+        border-bottom: 1px solid #ccc;
+        z-index: 1000;
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #headerLeft {
+        display: flex;
+        flex-direction: column;
+      }
+      #headerRight {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      /* ヘッダー内の各部品 */
+      #fixedHeader h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      #fixedHeader #maxScoreDisplay {
+        font-size: 14px;
+      }
+      #statusSummary {
+        margin-top: 5px;
+        font-size: 14px;
+      }
+      /* カードサイズ調整バー（幅・高さ両方） */
+      #cardSizeControl, #cardHeightControl {
+        width: 100%;
+        margin-top: 10px;
+      }
+      /* タイルコンテナ：flex-wrapで横並びに */
+      #tiles-container {
+        margin-top: 180px; /* ヘッダー分の余白 */
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+      /* カードのスタイル調整：Flexレイアウトで各部分の高さを調整 */
+      .tile {
+        display: flex;
+        flex-direction: column;
+        width: 300px;  /* スライダーで変更可能 */
+        height: 200px; /* スライダーで変更可能 */
+        margin: 8px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+        vertical-align: top;
+      }
+      .name {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .link {
+        display: block;
+        margin-bottom: 4px;
+      }
+      /* プレビュー部分：残りの高さを占有 */
+      .preview-container {
+        flex-grow: 1;
+        min-height: 0;
+        position: relative;
+        overflow: hidden;
+      }
+      /* iframe等は常にプレビューコンテナに合わせる */
+      .preview-container iframe {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      .multiple-links a {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .score-input {
+        display: inline-block;
+        margin-top: 8px;
+        width: 60px;
+      }
+      /* 採点用ボタン */
+      .score-button {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 4px 8px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      /* 固定送信ボタン（右上） */
+      #saveBtn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1100;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 固定ヘッダー -->
+    <div id="fixedHeader">
+      <div id="headerLeft">
+        <h1 id="title"></h1>
+        <div>満点: <span id="maxScoreDisplay"></span></div>
+      </div>
+      <div id="headerRight">
+        <button id="saveBtn" tabindex="-1">採点を記録</button>
+        <div id="statusSummary"></div>
+      </div>
+      <div id="cardSizeControl">
+        カード幅: 
+        <input type="range" id="cardSizeSlider" min="150" max="1000" value="300">
+        <span id="cardSizeValue">300px</span>
+      </div>
+      <div id="cardHeightControl">
+        カード高さ: 
+        <input type="range" id="cardHeightSlider" min="150" max="1000" value="200">
+        <span id="cardHeightValue">200px</span>
+      </div>
+    </div>
+    
+    <!-- タイル一覧 -->
+    <div id="tiles-container"></div>
+    
+    <script>
+      var data = <?!= JSON.stringify(data) ?>;  
+      var titleText = "<?!= title ?>";
+      var maxScore = <?!= maxScore ?>;
+      
+      document.getElementById('title').textContent = titleText;
+      document.getElementById('maxScoreDisplay').textContent = maxScore;
+      
+      var container = document.getElementById('tiles-container');
+      var statusSummaryEl = document.getElementById('statusSummary');
+      var tabIndexCounter = 1;
+      
+      // 各カード生成
+      data.forEach(function(item) {
+        var tile = document.createElement('div');
+        tile.className = 'tile';
+        
+        // 名前表示
+        var nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = item.name;
+        tile.appendChild(nameEl);
+        
+        // 単一リンクの場合の「作品を見る」リンク
+        if (item.link && !item.multipleLinks) {
+          var linkEl = document.createElement('a');
+          linkEl.className = 'link';
+          linkEl.href = item.link;
+          linkEl.target = '_blank';
+          linkEl.textContent = '作品を見る';
+          tile.appendChild(linkEl);
+        }
+        
+        // プレビューまたは複数リンク表示
+        var previewContainer = document.createElement('div');
+        previewContainer.className = 'preview-container';
+        if (item.link === '') {
+          previewContainer.textContent = '未提出';
+        } else if (item.multipleLinks) {
+          var multiDiv = document.createElement('div');
+          multiDiv.className = 'multiple-links';
+          item.linksArray.forEach(function(link, index) {
+            var a = document.createElement('a');
+            a.href = link;
+            a.target = '_blank';
+            a.textContent = 'リンク' + (index + 1);
+            multiDiv.appendChild(a);
+          });
+          previewContainer.appendChild(multiDiv);
+        } else if (item.embedCode) {
+          previewContainer.innerHTML = item.embedCode;
+        }
+        tile.appendChild(previewContainer);
+        
+        // 採点入力欄と○/×ボタン
+        var scoreContainer = document.createElement('div');
+        var inputEl = document.createElement('input');
+        inputEl.type = 'number';
+        inputEl.className = 'score-input';
+        inputEl.value = (item.score === "" ? "" : item.score);
+        if (item.link === '') {
+          inputEl.disabled = true;
+        } else {
+          inputEl.tabIndex = tabIndexCounter;
+          tabIndexCounter++;
+        }
+        scoreContainer.appendChild(inputEl);
+        
+        var okButton = document.createElement('button');
+        okButton.className = 'score-button';
+        okButton.textContent = '○';
+        okButton.addEventListener('click', function(){
+          inputEl.value = maxScore;
+          setTileColor(tile, maxScore, maxScore, item.link !== '');
+          updateStatus();
+          inputEl.focus();
+        });
+        scoreContainer.appendChild(okButton);
+        
+        var ngButton = document.createElement('button');
+        ngButton.className = 'score-button';
+        ngButton.textContent = '×';
+        ngButton.addEventListener('click', function(){
+          inputEl.value = 0;
+          setTileColor(tile, 0, maxScore, item.link !== '');
+          updateStatus();
+          inputEl.focus();
+        });
+        scoreContainer.appendChild(ngButton);
+        
+        inputEl.addEventListener('input', function(){
+          var value = inputEl.value.trim();
+          if (value === "") {
+            setTileColor(tile, null, maxScore, item.link !== '');
+          } else {
+            setTileColor(tile, parseInt(value), maxScore, item.link !== '');
+          }
+          updateStatus();
+        });
+        inputEl.addEventListener('keydown', function(e) {
+          if(e.key === 'Enter'){
+            e.preventDefault();
+            var inputs = container.querySelectorAll('input.score-input:not([disabled])');
+            var inputsArr = Array.from(inputs);
+            var currentIndex = inputsArr.indexOf(inputEl);
+            if(currentIndex >= 0 && currentIndex < inputsArr.length - 1){
+              inputsArr[currentIndex+1].focus();
+            }
+          }
+        });
+        
+        tile.appendChild(scoreContainer);
+        
+        if (item.score === "") {
+          setTileColor(tile, null, maxScore, item.link !== '');
+        } else {
+          setTileColor(tile, parseInt(item.score), maxScore, item.link !== '');
+        }
+        
+        tile.dataset.rowIndex = item.rowIndex;
+        container.appendChild(tile);
+      });
+      
+      function setTileColor(tile, score, maxScore, submitted) {
+        if (!submitted) {
+          tile.style.backgroundColor = 'darkgray';
+        } else if (score === null) {
+          tile.style.backgroundColor = 'white';
+        } else if (score === 0) {
+          tile.style.backgroundColor = 'red';
+        } else if (score >= maxScore) {
+          tile.style.backgroundColor = 'blue';
+        } else {
+          tile.style.backgroundColor = 'green';
+        }
+      }
+      
+      var cardSizeSlider = document.getElementById('cardSizeSlider');
+      var cardSizeValue = document.getElementById('cardSizeValue');
+      cardSizeSlider.addEventListener('input', function(){
+        var newWidth = cardSizeSlider.value;
+        cardSizeValue.textContent = newWidth + 'px';
+        var tiles = document.getElementsByClassName('tile');
+        Array.from(tiles).forEach(function(tile) {
+          tile.style.width = newWidth + 'px';
+        });
+      });
+      
+      var cardHeightSlider = document.getElementById('cardHeightSlider');
+      var cardHeightValue = document.getElementById('cardHeightValue');
+      cardHeightSlider.addEventListener('input', function(){
+        var newHeight = cardHeightSlider.value;
+        cardHeightValue.textContent = newHeight + 'px';
+        var tiles = document.getElementsByClassName('tile');
+        Array.from(tiles).forEach(function(tile) {
+          tile.style.height = newHeight + 'px';
+        });
+      });
+      
+      function updateStatus() {
+        var tiles = container.querySelectorAll('.tile');
+        var total = tiles.length;
+        var gradedCount = 0;
+        var pendingCount = 0;
+        var notSubmittedCount = 0;
+        tiles.forEach(function(tile) {
+          var inputEl = tile.querySelector('input.score-input');
+          if (inputEl.disabled) {
+            notSubmittedCount++;
+          } else {
+            if (inputEl.value.trim() === "") {
+              pendingCount++;
+            } else {
+              gradedCount++;
+            }
+          }
+        });
+        var statusText = "生徒数 " + total + "名、採点済み " + gradedCount + 
+                         "人、採点待ち " + pendingCount + "人、未提出 " + notSubmittedCount + "人";
+        statusSummaryEl.textContent = statusText;
+      }
+      
+      updateStatus();
+      
+      document.getElementById('saveBtn').addEventListener('click', function(){
+        var tiles = container.querySelectorAll('.tile');
+        var scoresArray = [];
+        tiles.forEach(function(tile) {
+          var rowIndex = tile.dataset.rowIndex;
+          var inputEl = tile.querySelector('input.score-input');
+          var score = inputEl.value.trim();
+          scoresArray.push({
+            rowIndex: parseInt(rowIndex),
+            score: score === "" ? "" : parseInt(score)
+          });
+        });
+        
+        google.script.run
+          .withSuccessHandler(function(){
+            alert("保存が完了しました。");
+          })
+          .saveScores_webui(scoresArray);
+      });
+    </script>
+  </body>
+</html>

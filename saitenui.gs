@@ -9,21 +9,40 @@ const NAME_COLUMN_WEBUI = 2;           // B列
 const LINK_COLUMN_WEBUI = 7;           // G列
 const SCORE_COLUMN_WEBUI = 8;          // H列
 
-// 画面タイトルと満点
+// 画面タイトルと満点（採点用UI用）
 const PAGE_TITLE_WEBUI = '1年英語ワーク(仮)';
 const MAX_SCORE_WEBUI = 10;
 
 /**
  * Webアプリのエントリーポイント
+ * 
+ * URLのパスに応じて使用するテンプレートを切り替えます。
+ * ・パスが指定されない場合は index.html を表示
+ * ・パスに「saiten.html」が含まれる場合は saiten.html を表示（採点用UI）
+ * ・他のテンプレート（例: kadaisakusei.html）も同一プロジェクト内で運用可能
+ * 
+ * ※この実装により、同一プロジェクト内で複数のHTMLファイルを使い分けられます。
  */
-function doGet() {
-  const template = HtmlService.createTemplateFromFile('index');
-  template.title = PAGE_TITLE_WEBUI;
-  template.maxScore = MAX_SCORE_WEBUI;
+function doGet(e) {
+  var templateName = "index"; // デフォルトは index.html
+  if (e && e.pathInfo) {
+    var path = e.pathInfo.toLowerCase();
+    if (path.indexOf("saiten.html") != -1) {
+      templateName = "saiten";
+    } else if (path.indexOf("kadaisakusei.html") != -1) {
+      templateName = "kadaisakusei";
+    }
+  }
   
-  // シートからデータ取得
-  const submissionsData = getSubmissionsData_webui();
-  template.data = submissionsData;
+  var template = HtmlService.createTemplateFromFile(templateName);
+  
+  // 採点用ページの場合のみ、テンプレートに必要な変数をセット
+  if (templateName === "saiten") {
+    template.title = PAGE_TITLE_WEBUI;
+    template.maxScore = MAX_SCORE_WEBUI;
+    var submissionsData = getSubmissionsData_webui();
+    template.data = submissionsData;
+  }
   
   return template.evaluate().setTitle(PAGE_TITLE_WEBUI);
 }
@@ -39,12 +58,7 @@ function getSubmissionsData_webui() {
   
   const lastRow = sheet.getLastRow();
   if (lastRow < START_ROW_WEBUI) return [];
-  const dataRange = sheet.getRange(
-    START_ROW_WEBUI, 
-    1, 
-    lastRow - START_ROW_WEBUI + 1, 
-    sheet.getLastColumn()
-  );
+  const dataRange = sheet.getRange(START_ROW_WEBUI, 1, lastRow - START_ROW_WEBUI + 1, sheet.getLastColumn());
   const values = dataRange.getValues();
   
   const results = [];
@@ -62,11 +76,11 @@ function getSubmissionsData_webui() {
       linkValue = linkValue.toString().trim();
     }
     
-    // スコアは、未入力の場合は空文字として扱い 0 とは区別
+    // スコアは、未入力の場合は空文字として扱い 0 とは区別する
     const rawScore = row[SCORE_COLUMN_WEBUI - 1];
-    const score = (rawScore === '' || rawScore === null) ? '' : rawScore;
+    const score = (rawScore === "" || rawScore === null) ? "" : rawScore;
     
-    // 名前がない場合はスキップ
+    // 名前がない場合はスキップ（必要ならこのチェックを解除できます）
     if (!name) continue;
     
     let embedCode = '';
@@ -77,10 +91,11 @@ function getSubmissionsData_webui() {
       // 未提出の場合はプレビューなし
       embedCode = '';
     } else {
-      // 複数リンクかどうか判定
+      // 複数リンクかどうか判定。 'http' の出現回数でチェック
       const countHttp = (linkValue.match(/http/g) || []).length;
       if (countHttp > 1) {
         multipleLinks = true;
+        // 正規表現で全てのURLを抽出
         linksArray = linkValue.match(/http\S+/g) || [];
       } else {
         // 単一リンクの場合、プレビュー用の埋め込みコードを生成
@@ -106,7 +121,9 @@ function getSubmissionsData_webui() {
 /**
  * 単一リンクからプレビュー表示用の埋め込みコードを生成する関数
  * 対応するのは、Googleスライド、Canva、Googleドキュメント、スプレッドシート、Googleマイマップ、
- * Googleドライブ、YouTube、Vimeo、Scratchなど
+ * Googleドライブ、YouTube、Vimeo、Scratch など
+ * @param {string} url - 対象のURL
+ * @return {Object} - { embedCode: string, type: string }
  */
 function generateEmbedCode_webui(url) {
   var embedCode = '';
@@ -152,15 +169,14 @@ function generateEmbedCode_webui(url) {
       var fileId = fileIdMatch[0];
       if (url.indexOf('view') !== -1) {
         embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + 
-                    '/preview" width="100%" height="360" frameborder="0" ' + 
-                    'allow="autoplay; fullscreen" allowfullscreen></iframe>';
+                    '/preview" width="100%" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
         type = 'video';
       } else {
         var imageUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
         embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center;' +
-                    'align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
-                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" ' +
-                    'alt="Google Drive Image" /></div>';
+                    ' align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
+                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Google Drive Image" />' +
+                    '</div>';
         type = 'image';
       }
     }
@@ -170,15 +186,14 @@ function generateEmbedCode_webui(url) {
       var fileId = fileIdMatch[0];
       if (url.indexOf('view') !== -1) {
         embedCode = '<iframe src="https://drive.google.com/file/d/' + fileId + 
-                    '/preview" width="100%" height="360" frameborder="0" ' +
-                    'allow="autoplay; fullscreen" allowfullscreen></iframe>';
+                    '/preview" width="100%" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
         type = 'video';
       } else {
         var imageUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
         embedCode = '<div style="width: 100%; max-height: 500px; display: flex; justify-content: center;' +
-                    'align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
-                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" ' +
-                    'alt="Google Drive Image" /></div>';
+                    ' align-items: center; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(63,69,81,0.16);">' +
+                    '<img src="' + imageUrl + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Google Drive Image" />' +
+                    '</div>';
         type = 'image';
       }
     }
@@ -188,8 +203,7 @@ function generateEmbedCode_webui(url) {
       var videoId = videoIdMatch[1];
       var videoUrl = 'https://www.youtube.com/embed/' + videoId;
       embedCode = '<iframe width="100%" height="480" src="' + videoUrl + 
-                  '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media;' +
-                  ' gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                  '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
       type = 'video';
     }
   } else if (url.indexOf('vimeo.com') !== -1) {
@@ -205,9 +219,9 @@ function generateEmbedCode_webui(url) {
     var parts = url.split('/');
     var projectId = parts[parts.length - 1];
     embedCode = '<div class="scratch-embed" data-project-id="' + projectId + '">' +
-                '<iframe src="https://scratch.mit.edu/projects/' + projectId + '/embed" ' +
-                'allowtransparency="true" width="100%" height="100%" frameborder="0" scrolling="no" ' +
-                'allowfullscreen></iframe></div>';
+                '<iframe src="https://scratch.mit.edu/projects/' + projectId + 
+                '/embed" allowtransparency="true" width="100%" height="100%" frameborder="0" scrolling="no" allowfullscreen></iframe>' +
+                '</div>';
     type = 'scratch';
   }
   
@@ -225,7 +239,7 @@ function saveScores_webui(scores) {
   const sheet = ss.getSheetByName(SHEET_NAME_WEBUI);
   if (!sheet) return;
   
-  // 各行ごとに書き込む
+  // 各行ごとに書き込む（未入力の場合は空文字のまま）
   scores.forEach(function(item) {
     const row = item.rowIndex;
     const cell = sheet.getRange(row, SCORE_COLUMN_WEBUI);

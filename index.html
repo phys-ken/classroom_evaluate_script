@@ -3,15 +3,16 @@
   <head>
     <base target="_top">
     <style>
-      /* ここでは index.html 用のスタイル例を記述 */
-      body { font-family: Arial, sans-serif; }
+      /* シンプルなトップページ用スタイル */
+      body { font-family: Arial, sans-serif; padding: 20px; }
       h1 { color: #333; }
       p { font-size: 16px; }
+      a { color: blue; }
     </style>
   </head>
   <body>
-    <h1>Welcome to the Index Page</h1>
-    <p>こちらはデフォルトのトップページです。</p>
-    <p>採点ページにアクセスするには、URLの末尾に <code>/saiten.html</code> を追加してください。</p>
+    <h1>Welcome to the Classroom System</h1>
+    <p>こちらはトップページです。以下のリンクから採点ページにアクセスしてください。</p>
+    <p><a href="<?!= ScriptApp.getService().getUrl() ?>/saiten.html" target="_blank">採点ページへ</a></p>
   </body>
 </html>

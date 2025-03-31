@@ -276,12 +276,31 @@ function bulkFetchSubmissionsFromEvaluation() {
     SpreadsheetApp.getUi().alert("EvaluationまたはSubmissionsシートがありません。");
     return;
   }
-  let last = evalSheet.getLastRow();
-  if (last < 2) {
+  
+  // 既存の提出物データ（ヘッダー行以外）が存在するかチェック
+  let lastRow = subsSheet.getLastRow();
+  if (lastRow > 1) { // ヘッダー行があるため、行数が2以上なら既存データあり
+    // ユーザーに確認ダイアログを表示
+    let response = SpreadsheetApp.getUi().alert(
+      "確認",
+      "現在のSubmissionsシートにある採点情報は消えてしまいますがよろしいですか？",
+      SpreadsheetApp.getUi().ButtonSet.OK_CANCEL
+    );
+    if (response !== SpreadsheetApp.getUi().Button.OK) {
+      Logger.log("ユーザーが既存データの削除をキャンセルしました。");
+      return; // キャンセルの場合は処理を中断
+    }
+    // ヘッダー行を残して、2行目以降をクリアする
+    subsSheet.getRange(2, 1, subsSheet.getLastRow()-1, subsSheet.getLastColumn()).clearContent();
+  }
+  
+  // 以下、既存の処理を実行して提出物一覧を取得・追記する
+  let evalLast = evalSheet.getLastRow();
+  if (evalLast < 2) {
     SpreadsheetApp.getUi().alert("Evaluationシートに対象データがありません。");
     return;
   }
-  let data = evalSheet.getRange(2, 1, last - 1, 2).getValues(); // [courseName, assignmentTitle]
+  let data = evalSheet.getRange(2, 1, evalLast - 1, 2).getValues(); // [courseName, assignmentName]
   let countFetched = 0;
   data.forEach(row => {
     const cName = row[0];
@@ -310,7 +329,6 @@ function bulkFetchSubmissionsFromEvaluation() {
   });
   SpreadsheetApp.getUi().alert(`提出物一括取得完了: ${countFetched}件`);
 }
-
 /** getWorkIdByCourseAndTitle: AssignmentList (A=courseName, B=workId, C=title)から課題IDを取得 */
 function getWorkIdByCourseAndTitle(cName, aTitle) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();

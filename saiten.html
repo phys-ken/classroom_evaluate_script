@@ -3,7 +3,7 @@
   <head>
     <base target="_top">
     <style>
-      /* 固定ヘッダーのスタイル */
+      /* 固定ヘッダー */
       #fixedHeader {
         position: fixed;
         top: 0;
@@ -18,23 +18,23 @@
         align-items: center;
         flex-wrap: wrap;
       }
-      /* ヘッダー左側：タイトル表示 */
       #headerLeft {
         display: flex;
         flex-direction: column;
       }
-      /* ヘッダー右側：送信ボタン・採点状況 */
       #headerRight {
         display: flex;
         flex-direction: column;
         align-items: flex-end;
       }
-      /* ヘッダー内のタイトル */
+      /* ヘッダー内の各部品 */
       #fixedHeader h1 {
         margin: 0;
         font-size: 20px;
       }
-      /* 採点状況のスタイル */
+      #fixedHeader #maxScoreDisplay {
+        font-size: 14px;
+      }
       #statusSummary {
         margin-top: 5px;
         font-size: 14px;
@@ -44,7 +44,7 @@
         width: 100%;
         margin-top: 10px;
       }
-      /* タイルコンテナ：横並びに折り返す */
+      /* タイルコンテナ：flex-wrapで横並びに */
       #tiles-container {
         margin-top: 180px; /* ヘッダー分の余白 */
         display: flex;
@@ -52,7 +52,7 @@
         align-items: flex-start;
         justify-content: flex-start;
       }
-      /* 各カード（.tile）のスタイル */
+      /* カード（.tile）のスタイル */
       .tile {
         display: flex;
         flex-direction: column;
@@ -79,7 +79,7 @@
         position: relative;
         overflow: hidden;
       }
-      /* 埋め込み iframe のサイズは常にプレビュー領域に合わせる */
+      /* iframe等は常にプレビューコンテナに合わせる */
       .preview-container iframe {
         position: absolute !important;
         top: 0;
@@ -96,7 +96,7 @@
         margin-top: 8px;
         width: 60px;
       }
-      /* 採点用ボタンのスタイル */
+      /* 採点用ボタン */
       .score-button {
         display: inline-block;
         margin-left: 4px;
@@ -104,7 +104,7 @@
         font-size: 16px;
         cursor: pointer;
       }
-      /* 右上に固定表示される送信ボタン */
+      /* 固定送信ボタン（右上） */
       #saveBtn {
         position: fixed;
         top: 10px;
@@ -140,10 +140,9 @@
     <div id="tiles-container"></div>
     
     <script>
-      // サーバー側から渡された変数をエスケープなしで出力する
+      // サーバー側から渡された変数を JSON で受け取る
       var data = <?!= JSON.stringify(data) ?>;  
       var titleText = <?!= JSON.stringify(title) ?>;
-      // maxScore はヘッダー表示からは削除するため、ここは利用しません
       
       // ヘッダータイトルを "Classroom一括採点アプリ" に設定
       document.getElementById('title').textContent = "Classroom一括採点アプリ";
@@ -163,7 +162,7 @@
         nameEl.textContent = item.displayName;
         tile.appendChild(nameEl);
         
-        // 単一リンクの場合は「作品を見る」リンクを表示
+        // 単一リンクの場合の「作品を見る」リンク
         if (item.link && !item.multipleLinks) {
           var linkEl = document.createElement('a');
           linkEl.className = 'link';
@@ -173,7 +172,7 @@
           tile.appendChild(linkEl);
         }
         
-        // プレビューまたは複数リンクの表示
+        // プレビューまたは複数リンク表示
         var previewContainer = document.createElement('div');
         previewContainer.className = 'preview-container';
         if (item.link === '') {
@@ -194,12 +193,13 @@
         }
         tile.appendChild(previewContainer);
         
-        // 採点入力欄と○/×ボタンのコンテナ
+        // 採点入力欄と○/×ボタンを含むコンテナ
         var scoreContainer = document.createElement('div');
         var inputEl = document.createElement('input');
         inputEl.type = 'number';
         inputEl.className = 'score-input';
         inputEl.value = (item.score === "" ? "" : item.score);
+        // 未提出の場合は入力欄を無効化
         if (item.link === '') {
           inputEl.disabled = true;
         } else {
@@ -218,6 +218,10 @@
           updateStatus();
           inputEl.focus();
         });
+        // 未提出の場合はボタンも disabled にする
+        if (item.link === '') {
+          okButton.disabled = true;
+        }
         scoreContainer.appendChild(okButton);
         
         // ×ボタン：0点を入力
@@ -230,9 +234,13 @@
           updateStatus();
           inputEl.focus();
         });
+        // 未提出の場合はボタンも disabled にする
+        if (item.link === '') {
+          ngButton.disabled = true;
+        }
         scoreContainer.appendChild(ngButton);
         
-        // 入力イベント：背景色を更新し、採点状況を再計算
+        // 入力イベント処理：背景色更新、採点状況更新
         inputEl.addEventListener('input', function(){
           var value = inputEl.value.trim();
           if (value === "") {
@@ -242,7 +250,7 @@
           }
           updateStatus();
         });
-        // Enterキーで次の採点入力欄へ移動
+        // Enterキーで次の採点入力欄に移動
         inputEl.addEventListener('keydown', function(e) {
           if(e.key === 'Enter'){
             e.preventDefault();
@@ -257,7 +265,7 @@
         
         tile.appendChild(scoreContainer);
         
-        // 初期背景色の設定
+        // 初期背景色設定
         if (item.score === "") {
           setTileColor(tile, null, item.maxPoints, item.link !== '');
         } else {
@@ -268,7 +276,7 @@
         container.appendChild(tile);
       });
       
-      // setTileColor: 採点値に応じたカード背景色を設定
+      // 背景色更新関数
       function setTileColor(tile, score, maxScore, submitted) {
         if (!submitted) {
           tile.style.backgroundColor = 'darkgray';
@@ -307,7 +315,7 @@
         });
       });
       
-      // updateStatus: 採点状況（生徒数、採点済み、採点待ち、未提出）を更新
+      // 採点状況更新関数
       function updateStatus() {
         var tiles = container.querySelectorAll('.tile');
         var total = tiles.length;
@@ -333,7 +341,7 @@
       
       updateStatus();
       
-      // 「採点を記録」ボタンの処理：各カードの採点値をシートへ送信
+      // 採点結果送信ボタンの処理
       document.getElementById('saveBtn').addEventListener('click', function(){
         var tiles = container.querySelectorAll('.tile');
         var scoresArray = [];
